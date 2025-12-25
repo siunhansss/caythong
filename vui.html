@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cây Thông Noel Merry Christmas</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    
+
+<canvas id="christmasCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('christmasCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+    let stars = [];         // Sao nền nhảy vị trí
+    let treeLights = [];    // Điểm sáng thân cây
+    let starBase = [];      // Các hạt tạo thân ngôi sao (sáng liên tục)
+    let starTips = [];      // Các hạt ở 5 đỉnh (nhấp nháy)
+    let specialStars = [];  // Sao 4 cánh
+    let beam = { x: 0, y: 0, angle: 0, radius: 0, heightPos: 0, active: true };
+    let lastSpecialSpawn = 0;
+
+    // Biến để kiểm tra khi nào cây hoàn thành để hiện chữ
+    let treeCompleted = false;
+
+    const treeConfig = {
+        baseY: 0,
+        topY: 0,
+        maxRadius: 220, 
+        spiralSpeed: 0.1, 
+        riseSpeed: 1,    
+    };
+    
+
+    function init() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        treeConfig.baseY = height * 0.95;
+        treeConfig.topY = height * 0.25; // Hạ thấp đỉnh cây xuống một chút để nhường chỗ cho chữ
+        beam.heightPos = treeConfig.baseY;
+        beam.radius = treeConfig.maxRadius;
+        treeCompleted = false; // Reset trạng thái cây
+
+        stars = [];
+        for (let i = 0; i < 250; i++) {
+            stars.push(createBackgroundStar());
+        }
+    }
+
+    function createBackgroundStar() {
+        return {
+            x: Math.random() * width,
+            y: Math.random() * height,
+            size: Math.random() * 1.5,
+            opacity: Math.random(),
+            blinkSpeed: 0.01 + Math.random() * 0.02
+        };
+    }
+
+    function isPointInStar(px, py, cx, cy, spikes, outerRadius, innerRadius) {
+        let rot = Math.PI / 2 * 3;
+        let step = Math.PI / spikes;
+        let path = new Path2D();
+        path.moveTo(cx, cy - outerRadius);
+        for (let i = 0; i < spikes; i++) {
+            path.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+            rot += step;
+            path.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+            rot += step;
+        }
+        path.closePath();
+        return ctx.isPointInPath(path, px, py);
+    }
+
+    function update() {
+        const now = Date.now();
+
+        // Cập nhật sao nền: Nhảy vị trí khi mờ hẳn
+        stars.forEach(star => {
+            star.opacity -= star.blinkSpeed;
+            if (star.opacity <= 0) {
+                star.x = Math.random() * width;
+                star.y = Math.random() * height;
+                star.opacity = 0;
+                star.blinkSpeed = -Math.abs(star.blinkSpeed);
+            } else if (star.opacity >= 1) {
+                star.blinkSpeed = Math.abs(star.blinkSpeed);
+            }
+        });
+
+        // Sao 4 cánh ngẫu nhiên
+        if (now - lastSpecialSpawn > 2000) {
+            for (let i = 0; i < 3; i++) {
+                specialStars.push({ x: Math.random() * width, y: Math.random() * height, spawnTime: now });
+            }
+            lastSpecialSpawn = now;
+        }
+        specialStars = specialStars.filter(s => now - s.spawnTime < 1000);
+
+        if (beam.active) {
+            const progress = (treeConfig.baseY - beam.heightPos) / (treeConfig.baseY - treeConfig.topY);
+            beam.radius = treeConfig.maxRadius * (1 - progress);
+            beam.angle += treeConfig.spiralSpeed;
+            beam.heightPos -= treeConfig.riseSpeed;
+            beam.x = width / 2 + Math.cos(beam.angle) * beam.radius;
+            beam.y = beam.heightPos;
+
+            for (let i = 0; i < 10; i++) { 
+                treeLights.push({
+                    x: beam.x + (Math.random() - 0.5) * 25,
+                    y: beam.y + (Math.random() - 0.5) * 25,
+                    size: Math.random() * 2,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            // Khi chạm đỉnh: Tạo ngôi sao đặc và các đỉnh nhấp nháy
+            if (beam.heightPos <= treeConfig.topY) {
+                beam.active = false;
+                treeCompleted = true; // Đánh dấu cây đã hoàn thành
+                const cx = width / 2, cy = treeConfig.topY;
+                
+                // 1. Tạo thân ngôi sao (Sáng liên tục)
+                for (let i = 0; i < 5000; i++) {
+                    let rx = (Math.random() - 0.5) * 110 + cx;
+                    let ry = (Math.random() - 0.5) * 110 + cy;
+                    if (isPointInStar(rx, ry, cx, cy, 5, 50, 20)) {
+                        starBase.push({ x: rx, y: ry, size: Math.random() * 2 });
+                    }
+                }
+            }
+        }
+    }
+
+    function draw() {
+        // Sao nền
+        stars.forEach(star => {
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(star.opacity)})`;
+            ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // Sao 4 cánh
+        specialStars.forEach(s => {
+            ctx.strokeStyle = "white"; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(s.x - 2, s.y); ctx.lineTo(s.x + 2, s.y);
+            ctx.moveTo(s.x, s.y - 2); ctx.lineTo(s.x, s.y + 2);
+            ctx.stroke();
+        });
+
+        // Thân cây (Nhấp nháy ngẫu nhiên)
+        treeLights.forEach(light => {
+            const blink = (Math.sin(Date.now() * 0.005 + light.phase) + 1) / 2;
+            ctx.fillStyle = "rgba(0, 255, 0, " + blink + ")";
+            ctx.beginPath(); ctx.arc(light.x, light.y, light.size, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // Thân ngôi sao (Sáng liên tục)
+        starBase.forEach(p => {
+            ctx.fillStyle = "rgba(255, 255, 230, 0.9)";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // 5 Đỉnh ngôi sao (Nhấp nháy ngẫu nhiên)
+        starTips.forEach(p => {
+            const blink = (Math.sin(Date.now() * 0.015 + p.phase) + 1) / 2;
+            ctx.fillStyle = `rgba(255, 255, 255, ${blink})`;
+            ctx.shadowBlur = 10; ctx.shadowColor = "white";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        if (beam.active) {
+            ctx.fillStyle = "white"; ctx.shadowBlur = 15; ctx.shadowColor = "gold";
+            ctx.beginPath(); ctx.arc(beam.x, beam.y, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // --- PHẦN MỚI THÊM VÀO ---
+        // Vẽ chữ Merry Christmas khi cây đã hình thành xong
+        if (treeCompleted) {
+            ctx.save(); // Lưu trạng thái context hiện tại
+            
+            // Cài đặt font chữ: in đậm, kích thước phản hồi theo chiều rộng màn hình, kiểu chữ mềm mại
+            const fontSize = Math.max(40, width / 15); 
+            ctx.font = `bold ${fontSize}px 'Brush Script MT', cursive, serif`;
+            ctx.fillStyle = "#FFD700"; // Màu vàng gold
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            // Tạo hiệu ứng phát sáng cho chữ
+            ctx.shadowColor = "#FFA500"; // Màu cam sáng
+            ctx.shadowBlur = 20;
+            
+            // Vị trí: Giữa màn hình theo chiều ngang, và phía trên đỉnh cây thông khoảng 100px
+            ctx.fillText("Merry Christmas", width / 2, treeConfig.topY - 100);
+            
+            ctx.restore(); // Khôi phục trạng thái context
+        }
+        // -------------------------
+    }
+
+    function animate() {
+        // Tạo hiệu ứng vệt mờ khi di chuyển
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, width, height);
+        update();
+        draw();
+        requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', init);
+    init();
+    animate();
+</script>
+
+</body>
+</html>
